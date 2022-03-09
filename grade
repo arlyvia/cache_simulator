@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+run_tests() {
+    paste -- "tests/$1.sh" "tests/$1.out" |
+        while IFS=$'\t' read -r CMD EXPECTED REST; do
+            ACTUAL="$(timeout 10 $CMD)"
+            if [ "$ACTUAL" != "$EXPECTED" ]; then
+                echo -e "\033[0;31mFAILED\033[0m"
+                echo "$CMD"
+                echo "EXPECTED: $EXPECTED"
+                echo "  ACTUAL: $ACTUAL"
+                exit 1  # in a subshell
+            fi
+        done
+    return $?
+}
+
+grade() {
+    printf ">> Running '$1' tests ... "
+    if run_tests "$1"; then
+        echo -e "\033[32mPASSED\033[0m"
+        return $2
+    else
+        return 0
+    fi
+}
+
+make clean
+make
+echo ==
+
+grade direct 1
+DIRECT=$?
+echo ==
+
+grade policy 2
+POLICY=$?
+echo ==
+
+grade size 2
+SIZE=$?
+echo ==
+
+echo ">> SCORE: $(( $DIRECT + $POLICY + $SIZE ))"
