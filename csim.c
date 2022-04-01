@@ -4,10 +4,15 @@
 #include <limits.h>  // ULONG_MAX
 #include <string.h>  // strcmp, strerror
 #include <errno.h>   // errno
+#include <math.h>
+#include <float.h>
+#include <fenv.h>
 
 /* fast base-2 integer logarithm */
 #define INT_LOG2(x) (31 - __builtin_clz(x))
 #define NOT_POWER2(x) (__builtin_clz(x) + __builtin_ctz(x) != 31)
+
+#define pow(two, shift) (1 << (shift))
 
 /* tag_bits = ADDRESS_LENGTH - set_bits - block_bits */
 #define ADDRESS_LENGTH 64
@@ -47,6 +52,8 @@ FILE *trace_fp = NULL;
  * TODO: Finish implementation
  */
 static void parse_arguments(int argc, char **argv) {
+    
+    char* trace_file;
     char c;
     while ((c = getopt(argc, argv, "S:K:B:p:t:vh")) != -1) {
         switch(c) {
@@ -59,18 +66,28 @@ static void parse_arguments(int argc, char **argv) {
                 break;
             case 'K':
                 // TODO
+                K = atoi(optarg);
                 break;
             case 'B':
                 // TODO
+                B = atoi(optarg);
                 break;
             case 'p':
                 if (!strcmp(optarg, "FIFO")) {
                     policy = FIFO;
                 }
                 // TODO: parse LRU, exit with error for unknown policy
+                else if (!strcmp(optarg, "LRU")) {
+                    policy = LRU;
+                } else {
+                    fprintf(stderr, "ERROR: unknown policy");
+                    exit(1);
+                }
                 break;
             case 't':
                 // TODO: open file trace_fp for reading
+                trace_file = optarg;
+                trace_fp = fopen(trace_file, "r");
                 if (!trace_fp) {
                     fprintf(stderr, "ERROR: %s: %s\n", optarg, strerror(errno));
                     exit(1);
@@ -78,9 +95,11 @@ static void parse_arguments(int argc, char **argv) {
                 break;
             case 'v':
                 // TODO
+                verbose = 1;
                 break;
             case 'h':
                 // TODO
+                print_usage(argv);
                 exit(0);
             default:
                 print_usage();
@@ -100,8 +119,6 @@ static void parse_arguments(int argc, char **argv) {
 
     /* Other setup if needed */
 
-
-
 }
 
 /**
@@ -109,9 +126,26 @@ static void parse_arguments(int argc, char **argv) {
  * TODO: Define your own!
  */
 
+//mem addy
+typedef unsigned long long int mem_addr_t;
 
+//struct for cache
+typedef struct cache_line {
+    char valid;
+    mem_addr_t tag;
+    unsigned long long int lru;
+} cache_line_t;
 
+typedef cache_line_t* cache_set_t;
 
+typedef cache_set_t* cache_t;
+
+//simulated cache
+cache_t cache;
+
+mem_addr_t set_index_mask;
+
+unsigned long long int lru_counter = 1;
 
 
 /**
@@ -124,8 +158,17 @@ static void parse_arguments(int argc, char **argv) {
  */
 static void allocate_cache() {
 
-
-
+    cache = (cache_set_t*)malloc(sizeof(cache_set_t) * S);
+    for (int i = 0; i < S; i++) {
+        cache[i] = (cache_line_t*)malloc(sizeof(cache_line_t) * K);
+        for (int j = 0; j < K; j++) {
+            cache[i][j].valid = 0;
+            cache[i][j].tag = 0;
+            cache[i][j].lru = 0;
+        }
+    }
+  
+    set_index_mask = (mem_addr_t)(S - 1);
 }
 
 /**
@@ -138,7 +181,11 @@ static void allocate_cache() {
  */
 static void free_cache() {
 
+    for (int i = 0; i < S; i++) {
+        free(cache[i]);
+    }
 
+    free(cache);
 
 }
 
@@ -158,9 +205,56 @@ int eviction_count = 0;
  * TODO: Implement
  */
 static void access_data(unsigned long addr) {
-    printf("Access to %016lx\n", addr);
+    //printf("Access to %016lx\n", addr);
 
+    if(policy == LRU || policy == FIFO){
 
+        int s = INT_LOG2(S);
+        int b = INT_LOG2(B);
+
+        unsigned long long int eviction_lru = ULONG_MAX;
+        unsigned int eviction_line = 0;
+        mem_addr_t set_index = (addr >> b) & set_index_mask;
+        mem_addr_t tag = addr >> (s + b);
+
+        cache_set_t cache_set = cache[set_index];
+
+        //hit
+        for (int i = 0; i < K; i++) {
+            if (cache_set[i].valid) {
+                if (cache_set[i].tag == tag) {
+                    cache_set[i].lru = lru_counter++;
+                    hit_count++;
+                    if (verbose) printf("hit ");
+                    return;
+                }
+            }
+        }
+
+        //miss
+        miss_count++;
+        if (verbose) printf("miss ");
+
+        for (int i = 0; i < K; i++) {
+            if (eviction_lru > cache_set[i].lru) {
+                eviction_line = i;
+                eviction_lru = cache_set[i].lru;
+            }
+        }
+
+        //evict
+        if (cache_set[eviction_line].valid) {
+            eviction_count++;
+            if (verbose) printf("eviction ");
+        }
+
+        cache_set[eviction_line].lru = lru_counter++;
+        cache_set[eviction_line].valid = 1;
+        cache_set[eviction_line].tag = tag;
+        
+    } else if (policy == FIFO) {
+        
+    }
 }
 
 /**
@@ -176,15 +270,29 @@ static void access_data(unsigned long addr) {
  * TODO: Implement
  */
 static void replay_trace() {
-    access_data(0);
 
+    char buf[1000];
 
+    while(fgets(buf, 1000, trace_fp)){
+		unsigned long long address = 0;
+		unsigned length = 0;
+		if (buf[1] == 'S' || buf[1] == 'L' || buf[1] == 'M'){
+			sscanf(buf+2, "%llx,%u", &address , &length);
+
+            if (verbose) putchar('\n');
+			if (verbose) printf("%c %llx,%u ", buf[1], address, length);
+			access_data(address);
+		}
+		if (buf[1] == 'M')
+			access_data(address);
+	}
 }
 
 /**
  * Print cache statistics (DO NOT MODIFY).
  */
 static void print_summary(int hits, int misses, int evictions) {
+    if (verbose) putchar('\n');
     printf("hits:%d misses:%d evictions:%d\n", hits, misses, evictions);
 }
 
