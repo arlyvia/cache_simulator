@@ -207,7 +207,7 @@ int eviction_count = 0;
 static void access_data(unsigned long addr) {
     //printf("Access to %016lx\n", addr);
 
-    if(policy == LRU || policy == FIFO){
+    if(policy == LRU){
 
         int s = INT_LOG2(S);
         int b = INT_LOG2(B);
@@ -253,7 +253,48 @@ static void access_data(unsigned long addr) {
         cache_set[eviction_line].tag = tag;
         
     } else if (policy == FIFO) {
-        
+        int s = INT_LOG2(S);
+        int b = INT_LOG2(B);
+
+        unsigned long long int eviction_lru = ULONG_MAX;
+        unsigned int eviction_line = 0;
+        mem_addr_t set_index = (addr >> b) & set_index_mask;
+        mem_addr_t tag = addr >> (s + b);
+
+        cache_set_t cache_set = cache[set_index];
+
+        //hit
+        for (int i = 0; i < K; i++) {
+            if (cache_set[i].valid) {
+                if (cache_set[i].tag == tag) {
+                    //cache_set[i].lru = lru_counter++;
+                    hit_count++;
+                    if (verbose) printf("hit ");
+                    return;
+                }
+            }
+        }
+
+        //miss
+        miss_count++;
+        if (verbose) printf("miss ");
+
+        for (int i = 0; i < K; i++) {
+            if (eviction_lru > cache_set[i].lru) {
+                eviction_line = i;
+                eviction_lru = cache_set[i].lru;
+            }
+        }
+
+        //evict
+        if (cache_set[eviction_line].valid) {
+            eviction_count++;
+            if (verbose) printf("eviction ");
+        }
+
+        cache_set[eviction_line].lru = lru_counter++;
+        cache_set[eviction_line].valid = 1;
+        cache_set[eviction_line].tag = tag;
     }
 }
 
