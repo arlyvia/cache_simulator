@@ -322,10 +322,23 @@ static void replay_trace() {
 
             if (verbose) putchar('\n');
 			if (verbose) printf("%c %llx,%u ", buf[1], address, length);
-			access_data(address);
+            //size
+            int normalized_addr = (address/B) * B;
+            int temp_size = (address - normalized_addr) + length;
+            
+			for(int i = normalized_addr; i < (normalized_addr + temp_size); i += B){
+                access_data(i);
+            }
 		}
-		if (buf[1] == 'M')
-			access_data(address);
+		if (buf[1] == 'M'){
+            //size
+            int normalized_addr = (address/B) * B;
+            int temp_size = (address - normalized_addr) + length;
+
+            for(int i = normalized_addr; i < (normalized_addr + temp_size); i += B){
+			    access_data(i);
+            }
+        }
 	}
 }
 
