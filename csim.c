@@ -145,7 +145,7 @@ cache_t cache;
 
 mem_addr_t set_index_mask;
 
-unsigned long long int lru_counter = 1;
+unsigned long long int lru_count = 1;
 
 
 /**
@@ -214,7 +214,7 @@ static void access_data(unsigned long addr) {
 
         unsigned long long int eviction_lru = ULONG_MAX;
         unsigned int eviction_line = 0;
-        
+
         mem_addr_t set_index = (addr >> b) & set_index_mask;
         mem_addr_t tag = addr >> (s + b);
 
@@ -224,7 +224,7 @@ static void access_data(unsigned long addr) {
         for (int i = 0; i < K; i++) {
             if (cache_set[i].valid) {
                 if (cache_set[i].tag == tag) {
-                    cache_set[i].lru = lru_counter++;
+                    cache_set[i].lru = lru_count++;
                     hit_count++;
                     if (verbose) printf("hit ");
                     return;
@@ -250,7 +250,7 @@ static void access_data(unsigned long addr) {
         }
 
         //update
-        cache_set[eviction_line].lru = lru_counter++;
+        cache_set[eviction_line].lru = lru_count++;
         cache_set[eviction_line].valid = 1;
         cache_set[eviction_line].tag = tag;
         
@@ -270,7 +270,7 @@ static void access_data(unsigned long addr) {
         for (int i = 0; i < K; i++) {
             if (cache_set[i].valid) {
                 if (cache_set[i].tag == tag) {
-                    //cache_set[i].lru = lru_counter++;
+                    //cache_set[i].lru = lru_count++;
                     hit_count++;
                     if (verbose) printf("hit ");
                     return;
@@ -296,7 +296,7 @@ static void access_data(unsigned long addr) {
         }
 
         //update
-        cache_set[eviction_line].lru = lru_counter++;
+        cache_set[eviction_line].lru = lru_count++;
         cache_set[eviction_line].valid = 1;
         cache_set[eviction_line].tag = tag;
     }
