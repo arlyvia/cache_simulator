@@ -214,6 +214,7 @@ static void access_data(unsigned long addr) {
 
         unsigned long long int eviction_lru = ULONG_MAX;
         unsigned int eviction_line = 0;
+        
         mem_addr_t set_index = (addr >> b) & set_index_mask;
         mem_addr_t tag = addr >> (s + b);
 
@@ -248,6 +249,7 @@ static void access_data(unsigned long addr) {
             if (verbose) printf("eviction ");
         }
 
+        //update
         cache_set[eviction_line].lru = lru_counter++;
         cache_set[eviction_line].valid = 1;
         cache_set[eviction_line].tag = tag;
@@ -258,6 +260,7 @@ static void access_data(unsigned long addr) {
 
         unsigned long long int eviction_lru = ULONG_MAX;
         unsigned int eviction_line = 0;
+
         mem_addr_t set_index = (addr >> b) & set_index_mask;
         mem_addr_t tag = addr >> (s + b);
 
@@ -292,6 +295,7 @@ static void access_data(unsigned long addr) {
             if (verbose) printf("eviction ");
         }
 
+        //update
         cache_set[eviction_line].lru = lru_counter++;
         cache_set[eviction_line].valid = 1;
         cache_set[eviction_line].tag = tag;
@@ -315,16 +319,19 @@ static void replay_trace() {
     char buf[1000];
 
     while(fgets(buf, 1000, trace_fp)){
+
 		unsigned long long address = 0;
-		unsigned length = 0;
-		if (buf[1] == 'S' || buf[1] == 'L' || buf[1] == 'M'){
-			sscanf(buf+2, "%llx,%u", &address , &length);
+		unsigned len = 0;
+
+		if (buf[1] == 'L' || buf[1] == 'S' || buf[1] == 'M'){
+			sscanf(buf+2, "%llx,%u", &address , &len);
 
             if (verbose) putchar('\n');
-			if (verbose) printf("%c %llx,%u ", buf[1], address, length);
+			if (verbose) printf("%c %llx,%u ", buf[1], address, len);
+
             //size
             int normalized_addr = (address/B) * B;
-            int temp_size = (address - normalized_addr) + length;
+            int temp_size = (address - normalized_addr) + len;
             
 			for(int i = normalized_addr; i < (normalized_addr + temp_size); i += B){
                 access_data(i);
@@ -333,7 +340,7 @@ static void replay_trace() {
 		if (buf[1] == 'M'){
             //size
             int normalized_addr = (address/B) * B;
-            int temp_size = (address - normalized_addr) + length;
+            int temp_size = (address - normalized_addr) + len;
 
             for(int i = normalized_addr; i < (normalized_addr + temp_size); i += B){
 			    access_data(i);
